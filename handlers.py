@@ -1,10 +1,16 @@
-from misc import dp, bot
+from misc import dp, bot, router
 from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram import F
+from aiogram.types.input_file import InputFile
 from openai import OpenAI
 import logging
 import os
 from pathlib import Path
+from gtts import gTTS
+from langdetect import detect
+
+
 
 
 class chatGPT():
@@ -21,7 +27,9 @@ class chatGPT():
     }],
                                                            max_tokens=16,
                                                            n=1,
-                                                           model=model)
+                                                           model=model,
+                                                           timeout=30)
+
     return chat_compelation.choices[0].message.content
 
 
@@ -37,7 +45,7 @@ async def start_handler(msg: Message):
   )
 
 
-@dp.message()
+@router.message(F.content_type.in_(['voice']))
 async def voice_process(msg: Message):
   file_id = msg.voice.file_id
   logging.info(f"Voice message received from {file_id}")
@@ -59,21 +67,19 @@ async def voice_process(msg: Message):
   logging.info(f"Transcript: {transcript.text}")
   response = chat_bot.get_completion(transcript.text)
   logging.info(f"Response: {response}")
-  response_audio = chat_bot.client.audio.speech.create(model="tts-1",
-                                                       voice="alloy",
-                                                       input=response)
-  logging.info(f"Response audio generation done!")
-  response_audio.stream_to_file(file_name)
-  return file_name
+  response = "I don not know" if response is None else response
+  detector = detect(response)
+  logging.info(f"Code of languge responce {detector}")
+  tts = gTTS(text=response, lang=detector)
+  tts.save(file_name)
+  #AudioSegment.from_mp3(file_name).export('result.ogg', format='ogg')
+  logging.info(f"Response audio generation in {file_name} done!")
+  await bot.send_audio(msg.chat.id, file_name)
+  os.remove(file_name)
+  #os.remove('result.ogg')
 
 
-@dp.message()
+@router.message(F.content_type.in_(['text']))
 async def message_handler(msg: Message):
-  if msg.content_type == 'voice':
-    response = await voice_process(msg)
-    logging.info(f"Response: {response}")
-    await msg.answer_voice(open(response, 'rb'))
-    os.remove(response)
-  elif msg.content_type == 'text':
-    await msg.answer(chat_bot.get_completion(prompt=msg.text))
-
+  logging.info("Recived Text Message")
+  await msg.answer(chat_bot.get_completion(prompt=msg.text))
