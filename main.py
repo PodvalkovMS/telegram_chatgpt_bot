@@ -14,4 +14,5 @@ async def main():
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
+  logging.info("Starting bot")
   asyncio.run(main())
